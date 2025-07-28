@@ -146,7 +146,7 @@
     <div class="login-container">
         <div class="login-header">
             <h1 class="login-title">
-                <i class="fas fa-robot"></i> Gemini Chat
+                <i class="fas fa-robot"></i> Jales ChatBot
             </h1>
             <p class="login-subtitle">Buat akun baru</p>
         </div>
@@ -215,7 +215,7 @@
             </div>
 
             <button type="submit" class="btn-primary">
-                <i class="fas fa-user-plus"></i> Daftar
+                <i class="fas fa-user-plus"></i> Daftar & Masuk
             </button>
         </form>
 

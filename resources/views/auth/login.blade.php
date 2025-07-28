@@ -146,7 +146,7 @@
     <div class="login-container">
         <div class="login-header">
             <h1 class="login-title">
-                <i class="fas fa-robot"></i> Gemini Chat
+                <i class="fas fa-robot"></i> Jales ChatBot
             </h1>
             <p class="login-subtitle">Masuk ke akun Anda</p>
         </div>

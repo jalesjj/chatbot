@@ -432,7 +432,7 @@
                             <i class="fas fa-robot"></i>
                         </div>
                         <div>
-                            <h1 class="chat-title">Gemini AI Assistant</h1>
+                            <h1 class="chat-title">Jales AI Assistant</h1>
                             <p class="chat-subtitle">Personal AI untuk {{ Auth::user()->name }}</p>
                         </div>
                     </div>
