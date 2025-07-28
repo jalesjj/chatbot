@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
@@ -45,4 +46,19 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+        public function chatHistories(): HasMany
+    {
+        return $this->hasMany(ChatHistory::class);
+    }
+
+    // Get chat history dengan limit
+    public function getRecentChats($limit = 50)
+    {
+        return $this->chatHistories()
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get();
+    }
 }
+
