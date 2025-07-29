@@ -1,5 +1,5 @@
 <?php
-// database/migrations/2025_07_28_032214_update_chat_histories_created_at_default.php
+// database/migrations/2025_07_29_000001_add_chat_title_to_chat_histories.php
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -9,14 +9,15 @@ return new class extends Migration
     public function up()
     {
         Schema::table('chat_histories', function (Blueprint $table) {
-            $table->timestamp('created_at')->default(DB::raw('CURRENT_TIMESTAMP'))->change();
+            $table->string('chat_title')->nullable()->after('bot_response');
+            $table->index(['user_id', 'session_id']);
         });
     }
 
     public function down()
     {
         Schema::table('chat_histories', function (Blueprint $table) {
-            $table->timestamp('created_at')->nullable(false)->change();
+            $table->dropColumn('chat_title');
         });
     }
 };

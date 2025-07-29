@@ -1,5 +1,5 @@
 <?php
-
+// routes/web.php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\Auth\AuthController;
@@ -16,7 +16,10 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [ChatbotController::class, 'index'])->name('chatbot.index');
     Route::post('/chat', [ChatbotController::class, 'sendMessage'])->name('chatbot.send');
-    Route::delete('/chat/clear', [ChatbotController::class, 'clearHistory'])->name('chatbot.clear');
+    Route::get('/chat/sessions', [ChatbotController::class, 'getChatSessions'])->name('chatbot.sessions');
+    Route::get('/chat/session/{sessionId}', [ChatbotController::class, 'loadChatSession'])->name('chatbot.session');
+    Route::put('/chat/session/{sessionId}/title', [ChatbotController::class, 'updateChatTitle'])->name('chatbot.update.title');
+    Route::delete('/chat/session/{sessionId}', [ChatbotController::class, 'deleteChatSession'])->name('chatbot.delete.session');
     Route::get('/chat/history', [ChatbotController::class, 'getHistory'])->name('chatbot.history');
 });
 

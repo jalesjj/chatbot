@@ -1,3 +1,4 @@
+{{-- resources/views/chatbot.blade.php --}}
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -122,11 +123,17 @@
             margin-bottom: 0.5rem;
             cursor: pointer;
             transition: all 0.3s ease;
+            position: relative;
+            group: hover;
         }
 
         .history-item:hover {
             border-color: var(--accent-green);
             background: rgba(0, 255, 136, 0.05);
+        }
+
+        .history-item:hover .history-actions {
+            display: flex;
         }
 
         .history-message {
@@ -136,11 +143,41 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            padding-right: 80px;
         }
 
         .history-time {
             font-size: 0.75rem;
             color: var(--text-secondary);
+        }
+
+        .history-actions {
+            display: none;
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            gap: 0.25rem;
+        }
+
+        .history-btn {
+            background: var(--secondary-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: all 0.3s ease;
+        }
+
+        .history-btn:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .history-btn.delete:hover {
+            border-color: #ff4444;
+            color: #ff4444;
         }
 
         /* Chat Area */
@@ -210,7 +247,6 @@
             gap: 0.5rem;
         }
 
-        /* Rest of the chat styles remain the same... */
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -346,6 +382,100 @@
             background-clip: text;
         }
 
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--secondary-dark);
+            margin: 15% auto;
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+        }
+
+        .close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--primary-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .modal-input:focus {
+            outline: none;
+            border-color: var(--accent-green);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+        }
+
+        .btn-modal {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-green), #00cc66);
+            color: black;
+            border-color: var(--accent-green);
+        }
+
+        .btn-secondary {
+            background: var(--primary-dark);
+            color: var(--text-primary);
+        }
+
+        .btn-modal:hover {
+            transform: translateY(-1px);
+        }
+
         /* Animations */
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(20px); }
@@ -362,14 +492,62 @@
             50% { box-shadow: 0 0 30px var(--accent-green); }
         }
 
+        /* Mobile Toggle Button */
+        .mobile-toggle {
+            display: none;
+            background: var(--primary-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .mobile-toggle:hover {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 15px var(--green-glow);
+        }
+
+        .mobile-toggle.sidebar-open {
+            left: calc(var(--sidebar-width) + 1rem);
+        }
+
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            backdrop-filter: blur(2px);
+        }
+
+        .sidebar-overlay.show {
+            display: block;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
+            .mobile-toggle {
+                display: block;
+            }
+
             .sidebar {
-                width: 100%;
+                width: var(--sidebar-width);
                 position: fixed;
                 z-index: 1000;
                 transform: translateX(-100%);
                 transition: transform 0.3s ease;
+                height: 100vh;
             }
             
             .sidebar.open {
@@ -378,14 +556,70 @@
             
             .chat-area {
                 width: 100%;
+                margin-left: 0;
+            }
+
+            .chat-header {
+                padding-left: 4rem;
+            }
+
+            .welcome-message {
+                padding-top: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar {
+                width: 280px;
+            }
+
+            .mobile-toggle.sidebar-open {
+                left: calc(280px + 1rem);
+            }
+
+            .chat-header {
+                padding: 1rem 1rem 1rem 4rem;
+            }
+
+            .header-left .chat-title {
+                font-size: 1.25rem;
+            }
+
+            .header-left .chat-subtitle {
+                font-size: 0.8rem;
+            }
+
+            .ai-avatar {
+                width: 40px;
+                height: 40px;
+            }
+
+            .chat-input-container {
+                padding: 1rem;
+            }
+
+            .chat-messages {
+                padding: 1rem;
+            }
+
+            .message-content {
+                max-width: 85%;
             }
         }
     </style>
 </head>
 <body>
     <div class="app-container">
+        <!-- Mobile Toggle Button -->
+        <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+
+        <!-- Sidebar Overlay for Mobile -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
         <!-- Sidebar -->
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="user-info">
                     <div class="user-avatar">
@@ -400,9 +634,6 @@
                 </div>
                 
                 <div class="sidebar-actions">
-                    <button class="btn-sidebar" onclick="clearHistory()">
-                        <i class="fas fa-trash"></i> Clear
-                    </button>
                     <a href="{{ route('logout') }}" class="btn-sidebar" 
                         onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                         <i class="fas fa-sign-out-alt"></i> Logout
@@ -413,10 +644,18 @@
             <div class="history-section">
                 <div class="history-title">Chat History</div>
                 <div id="historyContainer">
-                    @foreach($chatHistory as $chat)
-                    <div class="history-item" onclick="loadChat('{{ $chat->id }}')">
-                        <div class="history-message">{{ Str::limit($chat->user_message, 40) }}</div>
-                        <div class="history-time">{{ $chat->created_at->diffForHumans() }}</div>
+                    @foreach($chatSessions as $session)
+                    <div class="history-item" data-session-id="{{ $session->session_id }}">
+                        <div class="history-message">{{ $session->getDisplayTitle() }}</div>
+                        <div class="history-time">{{ $session->created_at->diffForHumans() }}</div>
+                        <div class="history-actions">
+                            <button class="history-btn" onclick="editChatTitle('{{ $session->session_id }}', '{{ $session->getDisplayTitle() }}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="history-btn delete" onclick="deleteChatSession('{{ $session->session_id }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
                     </div>
                     @endforeach
                 </div>
@@ -469,19 +708,77 @@
         </div>
     </div>
 
+    <!-- Edit Title Modal -->
+    <div id="editTitleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Judul Chat</h3>
+                <button class="close-btn" onclick="closeEditModal()">&times;</button>
+            </div>
+            <input type="text" id="newTitleInput" class="modal-input" placeholder="Masukkan judul baru">
+            <div class="modal-actions">
+                <button class="btn-modal btn-secondary" onclick="closeEditModal()">Batal</button>
+                <button class="btn-modal btn-primary" onclick="saveNewTitle()">Simpan</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Logout Form -->
     <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
         @csrf
     </form>
 
     <script>
-        // Load chat history dari server saat halaman dimuat
-        let currentChatHistory = @json($chatHistory);
+        // Global variables
+        let currentSessionId = null;
+        let editingSessionId = null;
+        let isSidebarOpen = false;
         
         document.addEventListener('DOMContentLoaded', function() {
-            // Existing JavaScript code for chat functionality...
             initializeChatFunctionality();
+            attachHistoryListeners();
+            initializeMobileHandlers();
         });
+
+        function initializeMobileHandlers() {
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 768) {
+                    closeSidebar();
+                }
+            });
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const toggle = document.getElementById('mobileToggle');
+            
+            isSidebarOpen = !isSidebarOpen;
+            
+            if (isSidebarOpen) {
+                sidebar.classList.add('open');
+                overlay.classList.add('show');
+                toggle.classList.add('sidebar-open');
+                toggle.innerHTML = '<i class="fas fa-times"></i>';
+                document.body.style.overflow = 'hidden'; // Prevent scroll
+            } else {
+                closeSidebar();
+            }
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const toggle = document.getElementById('mobileToggle');
+            
+            isSidebarOpen = false;
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+            toggle.classList.remove('sidebar-open');
+            toggle.innerHTML = '<i class="fas fa-bars"></i>';
+            document.body.style.overflow = ''; // Restore scroll
+        }
 
         function initializeChatFunctionality() {
             const messageInput = document.getElementById('messageInput');
@@ -501,6 +798,19 @@
             });
 
             sendBtn.addEventListener('click', sendMessage);
+        }
+
+        function attachHistoryListeners() {
+            const historyItems = document.querySelectorAll('.history-item');
+            historyItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    // Don't trigger if clicking on action buttons
+                    if (e.target.closest('.history-actions')) return;
+                    
+                    const sessionId = this.dataset.sessionId;
+                    loadChatSession(sessionId);
+                });
+            });
         }
 
         function sendMessage() {
@@ -529,7 +839,10 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify({ 
+                    message: message,
+                    session_id: currentSessionId
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -537,7 +850,13 @@
                 
                 if (data.success) {
                     addMessage(data.response, 'bot');
-                    updateHistorySidebar(); // Update sidebar dengan chat baru
+                    
+                    // Update current session ID for continuing conversation
+                    if (data.session_id) {
+                        currentSessionId = data.session_id;
+                    }
+                    
+                    updateHistorySidebar();
                 } else {
                     addMessage(data.error || 'Terjadi kesalahan', 'bot', true);
                 }
@@ -553,12 +872,122 @@
             });
         }
 
-        function addMessage(content, sender, isError = false) {
+        function loadChatSession(sessionId) {
+            currentSessionId = sessionId;
+            
+            // Close sidebar on mobile after selecting chat
+            if (window.innerWidth <= 768) {
+                closeSidebar();
+            }
+            
+            // Clear current messages
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = '';
+            
+            // Show loading
+            messagesContainer.innerHTML = '<div class="welcome-message"><h2 class="welcome-title">Memuat chat...</h2></div>';
+            
+            fetch(`/chat/session/${sessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        messagesContainer.innerHTML = '';
+                        
+                        // Add all messages from this session
+                        data.chats.forEach(chat => {
+                            addMessage(chat.user_message, 'user', false, chat.created_at);
+                            addMessage(chat.bot_response, 'bot', false, chat.created_at);
+                        });
+                        
+                        // Scroll to bottom
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    } else {
+                        messagesContainer.innerHTML = '<div class="welcome-message"><h2 class="welcome-title">Gagal memuat chat</h2></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading chat session:', error);
+                    messagesContainer.innerHTML = '<div class="welcome-message"><h2 class="welcome-title">Gagal memuat chat</h2></div>';
+                });
+        }
+
+        function editChatTitle(sessionId, currentTitle) {
+            editingSessionId = sessionId;
+            document.getElementById('newTitleInput').value = currentTitle;
+            document.getElementById('editTitleModal').style.display = 'block';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editTitleModal').style.display = 'none';
+            editingSessionId = null;
+        }
+
+        function saveNewTitle() {
+            const newTitle = document.getElementById('newTitleInput').value.trim();
+            if (!newTitle || !editingSessionId) return;
+
+            fetch(`/chat/session/${editingSessionId}/title`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ title: newTitle })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update sidebar
+                    updateHistorySidebar();
+                    closeEditModal();
+                } else {
+                    alert('Gagal mengupdate judul');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating title:', error);
+                alert('Gagal mengupdate judul');
+            });
+        }
+
+        function deleteChatSession(sessionId) {
+            if (!confirm('Apakah Anda yakin ingin menghapus chat ini?')) return;
+
+            fetch(`/chat/session/${sessionId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Remove from sidebar
+                    const historyItem = document.querySelector(`[data-session-id="${sessionId}"]`);
+                    if (historyItem) {
+                        historyItem.remove();
+                    }
+                    
+                    // If this was the current session, start new chat
+                    if (currentSessionId === sessionId) {
+                        newChat();
+                    }
+                } else {
+                    alert('Gagal menghapus chat');
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting chat:', error);
+                alert('Gagal menghapus chat');
+            });
+        }
+
+        function addMessage(content, sender, isError = false, timestamp = null) {
             const messagesContainer = document.getElementById('messagesContainer');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
             
-            const now = new Date();
+            const now = timestamp ? new Date(timestamp) : new Date();
             const timeString = now.toLocaleTimeString('id-ID', { 
                 hour: '2-digit', 
                 minute: '2-digit' 
@@ -643,42 +1072,8 @@
             }
         }
 
-        // Fungsi untuk clear history
-        function clearHistory() {
-            if (confirm('Apakah Anda yakin ingin menghapus semua chat history?')) {
-                fetch('/chat/clear', {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Clear sidebar history
-                        document.getElementById('historyContainer').innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">Tidak ada history</div>';
-                        
-                        // Clear current chat
-                        const messagesContainer = document.getElementById('messagesContainer');
-                        messagesContainer.innerHTML = `
-                            <div class="welcome-message">
-                                <h2 class="welcome-title">Chat Baru Dimulai!</h2>
-                                <p>History lama telah dihapus. Mulai percakapan baru.</p>
-                            </div>
-                        `;
-                        
-                        alert('History berhasil dihapus!');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Gagal menghapus history');
-                });
-            }
-        }
-
-        // Fungsi untuk memulai chat baru
         function newChat() {
+            currentSessionId = null;
             const messagesContainer = document.getElementById('messagesContainer');
             messagesContainer.innerHTML = `
                 <div class="welcome-message">
@@ -690,35 +1085,38 @@
             document.getElementById('messageInput').focus();
         }
 
-        // Update sidebar history setelah chat baru
         function updateHistorySidebar() {
-            fetch('/chat/history')
+            fetch('/chat/sessions')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         const historyContainer = document.getElementById('historyContainer');
-                        if (data.history.length === 0) {
+                        if (data.sessions.length === 0) {
                             historyContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">Tidak ada history</div>';
                         } else {
-                            historyContainer.innerHTML = data.history.map(chat => `
-                                <div class="history-item" onclick="loadChat('${chat.id}')">
-                                    <div class="history-message">${chat.user_message.substring(0, 40)}${chat.user_message.length > 40 ? '...' : ''}</div>
-                                    <div class="history-time">${formatTimeAgo(chat.created_at)}</div>
+                            historyContainer.innerHTML = data.sessions.map(session => `
+                                <div class="history-item" data-session-id="${session.session_id}">
+                                    <div class="history-message">${session.chat_title || session.user_message.substring(0, 30) + (session.user_message.length > 30 ? '...' : '')}</div>
+                                    <div class="history-time">${formatTimeAgo(session.created_at)}</div>
+                                    <div class="history-actions">
+                                        <button class="history-btn" onclick="editChatTitle('${session.session_id}', '${(session.chat_title || session.user_message).replace(/'/g, "\\'")}')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="history-btn delete" onclick="deleteChatSession('${session.session_id}')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             `).join('');
+                            
+                            // Re-attach listeners
+                            attachHistoryListeners();
                         }
                     }
                 })
                 .catch(error => console.error('Error updating history:', error));
         }
 
-        // Load specific chat (optional feature)
-        function loadChat(chatId) {
-            // Bisa diimplementasikan untuk load specific conversation
-            console.log('Loading chat:', chatId);
-        }
-
-        // Helper function untuk format time
         function formatTimeAgo(dateString) {
             const date = new Date(dateString);
             const now = new Date();
@@ -730,11 +1128,33 @@
             return `${Math.floor(diffInSeconds / 86400)} hari lalu`;
         }
 
-        // Keyboard shortcut untuk new chat
+        // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.key === 'n') {
                 e.preventDefault();
                 newChat();
+            }
+            
+            // Close modal with Escape
+            if (e.key === 'Escape') {
+                closeEditModal();
+                if (window.innerWidth <= 768 && isSidebarOpen) {
+                    closeSidebar();
+                }
+            }
+            
+            // Toggle sidebar with Ctrl+B on mobile
+            if (e.ctrlKey && e.key === 'b' && window.innerWidth <= 768) {
+                e.preventDefault();
+                toggleSidebar();
+            }
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(e) {
+            const modal = document.getElementById('editTitleModal');
+            if (e.target === modal) {
+                closeEditModal();
             }
         });
 

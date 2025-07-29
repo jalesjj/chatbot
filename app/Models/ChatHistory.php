@@ -1,5 +1,5 @@
 <?php
-
+// app/Models/ChatHistory.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +12,7 @@ class ChatHistory extends Model
         'session_id',
         'user_message',
         'bot_response',
+        'chat_title',
         'created_at'
     ];
 
@@ -36,5 +37,11 @@ class ChatHistory extends Model
     public function scopeForSession($query, $sessionId)
     {
         return $query->where('session_id', $sessionId);
+    }
+
+    // Get title untuk display di sidebar
+    public function getDisplayTitle()
+    {
+        return $this->chat_title ?: \Str::limit($this->user_message, 30);
     }
 }

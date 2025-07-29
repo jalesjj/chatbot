@@ -1,5 +1,5 @@
 <?php
-
+// app/Models/User.php
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -47,9 +47,32 @@ class User extends Authenticatable
         ];
     }
 
-        public function chatHistories(): HasMany
+    public function chatHistories(): HasMany
     {
         return $this->hasMany(ChatHistory::class);
+    }
+
+    // Get chat sessions yang unik untuk sidebar
+    public function getChatSessions($limit = 50)
+    {
+        return $this->chatHistories()
+            ->select('session_id', 'chat_title', 'user_message', 'created_at')
+            ->whereNotNull('session_id')
+            ->groupBy('session_id', 'chat_title', 'user_message', 'created_at')
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->unique('session_id')
+            ->take($limit);
+    }
+
+    // Get specific chat session dengan semua message
+    public function getChatBySession($sessionId)
+    {
+        return $this->chatHistories()
+            ->where('session_id', $sessionId)
+            ->orderBy('created_at', 'asc')
+            ->get();
     }
 
     // Get chat history dengan limit
@@ -61,4 +84,3 @@ class User extends Authenticatable
             ->get();
     }
 }
-

@@ -1,5 +1,5 @@
 <?php
-
+// app/Http/Controllers/ChatbotController.php
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -7,6 +7,7 @@ use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Models\ChatHistory;
+
 
 class ChatbotController extends Controller
 {
@@ -25,25 +26,26 @@ class ChatbotController extends Controller
     {
         $user = Auth::user();
         
-        // Ambil chat history jika ada
+        // Ambil chat sessions (bukan individual messages)
         try {
-            $chatHistory = $user->getRecentChats(50);
+            $chatSessions = $user->getChatSessions(50);
         } catch (\Exception $e) {
-            Log::error('Error loading chat history: ' . $e->getMessage());
-            $chatHistory = collect();
+            Log::error('Error loading chat sessions: ' . $e->getMessage());
+            $chatSessions = collect();
         }
         
-        return view('chatbot', compact('chatHistory'));
+        return view('chatbot', compact('chatSessions'));
     }
 
     public function sendMessage(Request $request)
     {
         $request->validate([
-            'message' => 'required|string|max:2000'
+            'message' => 'required|string|max:2000',
+            'session_id' => 'nullable|string'
         ]);
 
         $user = Auth::user();
-        $sessionId = $request->session()->getId();
+        $sessionId = $request->session_id ?: $request->session()->getId() . '_' . time();
 
         // Debug: Log API key
         Log::info('API Key exists: ' . ($this->apiKey ? 'Yes' : 'No'));
@@ -57,15 +59,29 @@ class ChatbotController extends Controller
         }
 
         try {
-            // SIMPLE REQUEST tanpa context dulu
+            // Get context dari session jika ada
+            $context = [];
+            if ($request->session_id) {
+                $previousChats = $user->getChatBySession($request->session_id)->take(-5); // 5 chat terakhir untuk context
+                foreach ($previousChats as $chat) {
+                    $context[] = [
+                        'parts' => [['text' => $chat->user_message]]
+                    ];
+                    $context[] = [
+                        'parts' => [['text' => $chat->bot_response]]
+                    ];
+                }
+            }
+
+            // Build request dengan context
             $requestData = [
-                'contents' => [
+                'contents' => array_merge($context, [
                     [
                         'parts' => [
                             ['text' => $request->message]
                         ]
                     ]
-                ],
+                ]),
                 'generationConfig' => [
                     'temperature' => 0.7,
                     'maxOutputTokens' => 2048,
@@ -73,7 +89,6 @@ class ChatbotController extends Controller
             ];
 
             Log::info('Sending request to Gemini API');
-            Log::info('Request data: ' . json_encode($requestData));
 
             $response = $this->client->post($this->apiUrl . '?key=' . $this->apiKey, [
                 'json' => $requestData,
@@ -89,6 +104,12 @@ class ChatbotController extends Controller
             if (isset($data['candidates'][0]['content']['parts'][0]['text'])) {
                 $botResponse = $data['candidates'][0]['content']['parts'][0]['text'];
                 
+                // Generate chat title untuk session baru
+                $chatTitle = null;
+                if (!$request->session_id) {
+                    $chatTitle = $this->generateChatTitle($request->message);
+                }
+                
                 // Simpan ke database
                 try {
                     ChatHistory::create([
@@ -96,18 +117,19 @@ class ChatbotController extends Controller
                         'session_id' => $sessionId,
                         'user_message' => $request->message,
                         'bot_response' => $botResponse,
+                        'chat_title' => $chatTitle,
                         'created_at' => now()
                     ]);
                     Log::info('Chat saved to database successfully');
                 } catch (\Exception $dbError) {
                     Log::error('Database save error: ' . $dbError->getMessage());
                     Log::error('Stack trace: ' . $dbError->getTraceAsString());
-                    // Continue tanpa error, chat tetap bisa jalan
                 }
                 
                 return response()->json([
                     'success' => true,
-                    'response' => $botResponse
+                    'response' => $botResponse,
+                    'session_id' => $sessionId
                 ]);
             } else {
                 Log::error('Invalid Gemini API response structure: ' . json_encode($data));
@@ -151,41 +173,106 @@ class ChatbotController extends Controller
         }
     }
 
-    // Clear history
-    public function clearHistory(Request $request)
+    // Generate chat title dari first message
+    private function generateChatTitle($message)
+    {
+        $title = \Str::limit($message, 30);
+        // Remove common starting words
+        $title = preg_replace('/^(hai|halo|hello|hi|selamat|tolong|bisa|gimana|apa|bagaimana|jelaskan)\s+/i', '', $title);
+        return ucfirst(trim($title));
+    }
+
+    // Load specific chat session
+    public function loadChatSession(Request $request, $sessionId)
     {
         try {
             $user = Auth::user();
-            ChatHistory::where('user_id', $user->id)->delete();
+            $chats = $user->getChatBySession($sessionId);
             
             return response()->json([
                 'success' => true,
-                'message' => 'History berhasil dihapus'
+                'chats' => $chats,
+                'session_id' => $sessionId
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'Gagal menghapus history'
+                'error' => 'Gagal memuat chat session'
             ], 500);
         }
     }
 
-    // Get history
-    public function getHistory(Request $request)
+    // Update chat title
+    public function updateChatTitle(Request $request, $sessionId)
     {
+        $request->validate([
+            'title' => 'required|string|max:100'
+        ]);
+
         try {
             $user = Auth::user();
-            $history = $user->getRecentChats(100);
+            
+            // Update title di semua chat dalam session ini
+            ChatHistory::where('user_id', $user->id)
+                ->where('session_id', $sessionId)
+                ->update(['chat_title' => $request->title]);
             
             return response()->json([
                 'success' => true,
-                'history' => $history
+                'message' => 'Judul chat berhasil diupdate'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Gagal mengupdate judul'
+            ], 500);
+        }
+    }
+
+    // Delete specific chat session
+    public function deleteChatSession(Request $request, $sessionId)
+    {
+        try {
+            $user = Auth::user();
+            
+            ChatHistory::where('user_id', $user->id)
+                ->where('session_id', $sessionId)
+                ->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Chat berhasil dihapus'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Gagal menghapus chat'
+            ], 500);
+        }
+    }
+
+    // Get chat sessions untuk sidebar
+    public function getChatSessions(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $sessions = $user->getChatSessions(100);
+            
+            return response()->json([
+                'success' => true,
+                'sessions' => $sessions
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => true,
-                'history' => []
+                'sessions' => []
             ]);
         }
+    }
+
+    // Get history (backward compatibility)
+    public function getHistory(Request $request)
+    {
+        return $this->getChatSessions($request);
     }
 }
