@@ -393,6 +393,7 @@
                 </a>
             </div>
             
+            <!-- FIXED: Only one logout button here -->
             <div class="admin-actions">
                 <a href="{{ route('logout') }}" class="btn-logout" 
                     onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
