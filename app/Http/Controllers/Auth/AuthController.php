@@ -1,5 +1,5 @@
 <?php
-// app/Http/Controllers/Auth/AuthController.php
+// app/Http/Controllers/Auth/AuthController.php (Updated)
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
@@ -26,7 +26,23 @@ class AuthController extends Controller
         ]);
 
         if (Auth::attempt($credentials)) {
+            $user = Auth::user();
+            
+            // Check if user is banned
+            if ($user->status === 'banned') {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Akun Anda telah diblokir. Silakan hubungi administrator.',
+                ])->onlyInput('email');
+            }
+
             $request->session()->regenerate();
+            
+            // Redirect based on role
+            if ($user->role === 'admin') {
+                return redirect()->intended(route('admin.dashboard'));
+            }
+            
             return redirect()->intended(route('chatbot.index'));
         }
 
@@ -54,6 +70,8 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => 'user', // Default role
+            'status' => 'active', // Default status
         ]);
 
         Auth::login($user);

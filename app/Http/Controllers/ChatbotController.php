@@ -1,5 +1,5 @@
 <?php
-// app/Http/Controllers/ChatbotController.php
+// app/Http/Controllers/ChatbotController.php (Simplified Fix)
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -7,17 +7,23 @@ use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Models\ChatHistory;
-
+use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\ServerException;
 
 class ChatbotController extends Controller
 {
     private $client;
     private $apiKey;
     private $apiUrl;
+    private $maxRetries = 3;
+    private $retryDelay = 2; // seconds
 
     public function __construct()
     {
-        $this->client = new Client(['timeout' => 30]);
+        $this->client = new Client([
+            'timeout' => 60,
+            'connect_timeout' => 30
+        ]);
         $this->apiKey = env('GEMINI_API_KEY');
         $this->apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
     }
@@ -26,7 +32,6 @@ class ChatbotController extends Controller
     {
         $user = Auth::user();
         
-        // Ambil chat sessions (bukan individual messages)
         try {
             $chatSessions = $user->getChatSessions(50);
         } catch (\Exception $e) {
@@ -47,10 +52,6 @@ class ChatbotController extends Controller
         $user = Auth::user();
         $sessionId = $request->session_id ?: $request->session()->getId() . '_' . time();
 
-        // Debug: Log API key
-        Log::info('API Key exists: ' . ($this->apiKey ? 'Yes' : 'No'));
-        Log::info('User message: ' . $request->message);
-
         if (!$this->apiKey) {
             return response()->json([
                 'success' => false,
@@ -59,51 +60,41 @@ class ChatbotController extends Controller
         }
 
         try {
-            // Get context dari session jika ada
-            $context = [];
+            // Untuk chat kedua dan seterusnya, buat context sederhana
+            $messageWithContext = $request->message;
+            
             if ($request->session_id) {
-                $previousChats = $user->getChatBySession($request->session_id)->take(-5); // 5 chat terakhir untuk context
-                foreach ($previousChats as $chat) {
-                    $context[] = [
-                        'parts' => [['text' => $chat->user_message]]
-                    ];
-                    $context[] = [
-                        'parts' => [['text' => $chat->bot_response]]
-                    ];
+                $context = $this->buildSimpleContext($user, $request->session_id);
+                if ($context) {
+                    $messageWithContext = $context . "\n\nUser: " . $request->message;
                 }
             }
-
-            // Build request dengan context
+            
+            // Build request yang lebih sederhana
             $requestData = [
-                'contents' => array_merge($context, [
+                'contents' => [
                     [
                         'parts' => [
-                            ['text' => $request->message]
+                            ['text' => $messageWithContext]
                         ]
                     ]
-                ]),
+                ],
                 'generationConfig' => [
                     'temperature' => 0.7,
                     'maxOutputTokens' => 2048,
                 ]
             ];
 
-            Log::info('Sending request to Gemini API');
-
-            $response = $this->client->post($this->apiUrl . '?key=' . $this->apiKey, [
-                'json' => $requestData,
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                ]
+            Log::info('Sending request to Gemini API', [
+                'session_id' => $sessionId,
+                'has_context' => $request->session_id ? true : false,
+                'message_length' => strlen($messageWithContext)
             ]);
 
-            $data = json_decode($response->getBody(), true);
+            // Try API call dengan retry logic
+            $botResponse = $this->callGeminiApiWithRetry($requestData);
             
-            Log::info('Gemini API Response: ' . json_encode($data));
-            
-            if (isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-                $botResponse = $data['candidates'][0]['content']['parts'][0]['text'];
-                
+            if ($botResponse) {
                 // Generate chat title untuk session baru
                 $chatTitle = null;
                 if (!$request->session_id) {
@@ -111,20 +102,7 @@ class ChatbotController extends Controller
                 }
                 
                 // Simpan ke database
-                try {
-                    ChatHistory::create([
-                        'user_id' => $user->id,
-                        'session_id' => $sessionId,
-                        'user_message' => $request->message,
-                        'bot_response' => $botResponse,
-                        'chat_title' => $chatTitle,
-                        'created_at' => now()
-                    ]);
-                    Log::info('Chat saved to database successfully');
-                } catch (\Exception $dbError) {
-                    Log::error('Database save error: ' . $dbError->getMessage());
-                    Log::error('Stack trace: ' . $dbError->getTraceAsString());
-                }
+                $this->saveChatHistory($user->id, $sessionId, $request->message, $botResponse, $chatTitle);
                 
                 return response()->json([
                     'success' => true,
@@ -132,52 +110,163 @@ class ChatbotController extends Controller
                     'session_id' => $sessionId
                 ]);
             } else {
-                Log::error('Invalid Gemini API response structure: ' . json_encode($data));
                 return response()->json([
                     'success' => false,
-                    'error' => 'Respons tidak valid dari Gemini API'
-                ], 500);
+                    'error' => 'Gemini API tidak dapat diakses saat ini. Silakan coba beberapa saat lagi.'
+                ], 503);
             }
 
-        } catch (\GuzzleHttp\Exception\ClientException $e) {
-            $statusCode = $e->getResponse()->getStatusCode();
-            $errorBody = $e->getResponse()->getBody()->getContents();
-            
-            Log::error('Gemini API Client Error: ', [
-                'status' => $statusCode,
-                'body' => $errorBody,
-                'url' => $this->apiUrl
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'error' => 'API Error: ' . $statusCode . ' - ' . $errorBody
-            ], 500);
-            
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            Log::error('Gemini API Request Error: ' . $e->getMessage());
-            
-            return response()->json([
-                'success' => false,
-                'error' => 'Koneksi ke API bermasalah: ' . $e->getMessage()
-            ], 500);
-            
         } catch (\Exception $e) {
-            Log::error('General Error: ' . $e->getMessage());
+            Log::error('General Error in sendMessage: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return response()->json([
                 'success' => false,
-                'error' => 'Error: ' . $e->getMessage()
+                'error' => 'Terjadi kesalahan sistem. Silakan coba lagi.'
             ], 500);
         }
     }
 
-    // Generate chat title dari first message
+    private function callGeminiApiWithRetry($requestData)
+    {
+        $attempt = 0;
+        
+        while ($attempt < $this->maxRetries) {
+            try {
+                Log::info("Gemini API attempt " . ($attempt + 1) . "/" . $this->maxRetries);
+                
+                $response = $this->client->post($this->apiUrl . '?key=' . $this->apiKey, [
+                    'json' => $requestData,
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                    ],
+                    'timeout' => 30 // Reduce timeout for retry
+                ]);
+
+                $data = json_decode($response->getBody(), true);
+                
+                if (isset($data['candidates'][0]['content']['parts'][0]['text'])) {
+                    Log::info('Gemini API call successful on attempt ' . ($attempt + 1));
+                    return $data['candidates'][0]['content']['parts'][0]['text'];
+                } else {
+                    Log::warning('Invalid Gemini API response structure: ' . json_encode($data));
+                    
+                    // Check if there's an error in the response
+                    if (isset($data['error'])) {
+                        Log::error('Gemini API Error: ' . json_encode($data['error']));
+                        throw new \Exception('Gemini API Error: ' . $data['error']['message'] ?? 'Unknown error');
+                    }
+                    
+                    throw new \Exception('Invalid API response structure');
+                }
+
+            } catch (ServerException $e) {
+                $statusCode = $e->getResponse()->getStatusCode();
+                $errorBody = $e->getResponse()->getBody()->getContents();
+                
+                Log::warning("Gemini API Server Error (Attempt " . ($attempt + 1) . "): {$statusCode} - {$errorBody}");
+                
+                // Server errors (5xx) are retryable
+                if ($statusCode >= 500 && $statusCode < 600) {
+                    $attempt++;
+                    if ($attempt < $this->maxRetries) {
+                        $delay = $this->retryDelay * pow(2, $attempt - 1);
+                        Log::info("Retrying in {$delay} seconds...");
+                        sleep($delay);
+                        continue;
+                    }
+                }
+                
+                throw $e;
+                
+            } catch (ClientException $e) {
+                $statusCode = $e->getResponse()->getStatusCode();
+                $errorBody = $e->getResponse()->getBody()->getContents();
+                
+                Log::error("Gemini API Client Error: {$statusCode} - {$errorBody}");
+                
+                // Handle specific client errors
+                if ($statusCode == 429) { // Rate limit
+                    $attempt++;
+                    if ($attempt < $this->maxRetries) {
+                        $delay = $this->retryDelay * pow(2, $attempt - 1);
+                        Log::info("Rate limited. Retrying in {$delay} seconds...");
+                        sleep($delay);
+                        continue;
+                    }
+                }
+                
+                // Don't retry on other client errors
+                return null;
+                
+            } catch (\Exception $e) {
+                Log::error("Gemini API General Error (Attempt " . ($attempt + 1) . "): " . $e->getMessage());
+                
+                $attempt++;
+                if ($attempt < $this->maxRetries) {
+                    $delay = $this->retryDelay * $attempt;
+                    Log::info("Retrying in {$delay} seconds...");
+                    sleep($delay);
+                } else {
+                    return null;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    private function buildSimpleContext($user, $sessionId)
+    {
+        try {
+            // Ambil 3 pesan terakhir untuk context
+            $previousChats = ChatHistory::where('user_id', $user->id)
+                ->where('session_id', $sessionId)
+                ->orderBy('created_at', 'desc')
+                ->take(3)
+                ->get()
+                ->reverse();
+                
+            if ($previousChats->isEmpty()) {
+                return null;
+            }
+            
+            $context = "Previous conversation:\n";
+            foreach ($previousChats as $chat) {
+                $context .= "User: " . $chat->user_message . "\n";
+                $context .= "Assistant: " . $chat->bot_response . "\n";
+            }
+            $context .= "\nContinue the conversation:";
+            
+            return $context;
+            
+        } catch (\Exception $e) {
+            Log::error('Error building context: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function saveChatHistory($userId, $sessionId, $userMessage, $botResponse, $chatTitle = null)
+    {
+        try {
+            ChatHistory::create([
+                'user_id' => $userId,
+                'session_id' => $sessionId,
+                'user_message' => $userMessage,
+                'bot_response' => $botResponse,
+                'chat_title' => $chatTitle,
+                'created_at' => now()
+            ]);
+            Log::info('Chat saved to database successfully');
+        } catch (\Exception $dbError) {
+            Log::error('Database save error: ' . $dbError->getMessage());
+            // Don't throw, just log - we don't want to fail the response if DB save fails
+        }
+    }
+
     private function generateChatTitle($message)
     {
         $title = \Str::limit($message, 30);
-        // Remove common starting words
         $title = preg_replace('/^(hai|halo|hello|hi|selamat|tolong|bisa|gimana|apa|bagaimana|jelaskan)\s+/i', '', $title);
         return ucfirst(trim($title));
     }
@@ -187,7 +276,10 @@ class ChatbotController extends Controller
     {
         try {
             $user = Auth::user();
-            $chats = $user->getChatBySession($sessionId);
+            $chats = ChatHistory::where('user_id', $user->id)
+                ->where('session_id', $sessionId)
+                ->orderBy('created_at', 'asc')
+                ->get();
             
             return response()->json([
                 'success' => true,
@@ -195,6 +287,7 @@ class ChatbotController extends Controller
                 'session_id' => $sessionId
             ]);
         } catch (\Exception $e) {
+            Log::error('Error loading chat session: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'error' => 'Gagal memuat chat session'
@@ -212,7 +305,6 @@ class ChatbotController extends Controller
         try {
             $user = Auth::user();
             
-            // Update title di semua chat dalam session ini
             ChatHistory::where('user_id', $user->id)
                 ->where('session_id', $sessionId)
                 ->update(['chat_title' => $request->title]);
@@ -274,5 +366,25 @@ class ChatbotController extends Controller
     public function getHistory(Request $request)
     {
         return $this->getChatSessions($request);
+    }
+
+    // Method untuk check API status
+    public function checkApiStatus()
+    {
+        try {
+            $response = $this->client->get('https://generativelanguage.googleapis.com/v1beta/models?key=' . $this->apiKey, [
+                'timeout' => 10
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'status' => 'API is accessible'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'status' => 'API is not accessible: ' . $e->getMessage()
+            ], 503);
+        }
     }
 }

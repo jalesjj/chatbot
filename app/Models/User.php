@@ -1,5 +1,5 @@
 <?php
-// app/Models/User.php
+// app/Models/User.php (Fixed)
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -22,6 +22,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'status',
     ];
 
     /**
@@ -50,6 +52,18 @@ class User extends Authenticatable
     public function chatHistories(): HasMany
     {
         return $this->hasMany(ChatHistory::class);
+    }
+
+    // Check if user is admin
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    // Check if user is banned
+    public function isBanned()
+    {
+        return $this->status === 'banned';
     }
 
     // Get chat sessions yang unik untuk sidebar

@@ -722,6 +722,19 @@
             </div>
         </div>
     </div>
+    
+    <div class="sidebar-actions">
+    @if(Auth::user()->role === 'admin')
+    <a href="{{ route('admin.dashboard') }}" class="btn-sidebar" style="margin-bottom: 0.5rem;">
+        <i class="fas fa-cog"></i> Admin Panel
+    </a>
+    @endif
+    
+    <a href="{{ route('logout') }}" class="btn-sidebar" 
+        onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+        <i class="fas fa-sign-out-alt"></i> Logout
+    </a>
+</div>
 
     <!-- Logout Form -->
     <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
