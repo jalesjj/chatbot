@@ -7,7 +7,7 @@
 - [ ] admin input API Gemini lewat panel admin. jadi API tidak harus di codingannya
 
 ## Error
-- [ ] pertanyaan ke 2 di chatbot error
+- [x] pertanyaan ke 2 di chatbot error
 - [ ] tombol logout ada 2
 - [ ] tombol kembali ke panel admin tidak responsive
 - [ ] kernel.php tidak terbaca
