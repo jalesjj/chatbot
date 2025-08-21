@@ -32,7 +32,7 @@ class AuthController extends Controller
             if ($user->status === 'banned') {
                 Auth::logout();
                 return back()->withErrors([
-                    'email' => 'Akun Anda telah diblokir. Silakan hubungi administrator.',
+                    'email' => 'Akun Anda telah diblokir.',
                 ])->onlyInput('email');
             }
 

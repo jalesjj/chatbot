@@ -17,7 +17,7 @@ class CheckBannedUser
         // Check if authenticated user is banned
         if (auth()->check() && auth()->user()->status === 'banned') {
             Auth::logout();
-            return redirect()->route('login')->with('error', 'Akun Anda telah diblokir. Silakan hubungi administrator.');
+            return redirect()->route('login')->with('error', 'Akun Anda telah diblokir.');
         }
 
         return $next($request);
